@@ -1949,7 +1949,7 @@ if [ -z "$skip_zipfile" ]; then
 	classic_tag=
 	if [ -n "$classic" ] && [[ "${project_version,,}" != *"classic"* ]]; then
 		# if it's a classic build, and classic isn't in the name, append it for clarity
-		classic_tag="-classic"
+		# classic_tag="-classic"
 	fi
 
 	archive_version="$project_version"
