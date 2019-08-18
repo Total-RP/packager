@@ -2015,6 +2015,19 @@ if [ -z "$skip_zipfile" ]; then
 	upload_wowinterface=$( [[ -z "$skip_upload" && -n "$tag" && -n "$addonid" && -n "$wowi_token" ]] && echo true )
 	upload_github=$( [[ -z "$skip_upload" && -n "$tag" && -n "$project_github_slug" && -n "$github_token" ]] && echo true )
 
+  file_type="alpha"
+  if [ -n "$tag" ]; then
+    if [[ "${tag,,}" == *"alpha"* ]]; then
+      file_type="alpha"
+      upload_wowinterface=
+    elif [[ "${tag,,}" == *"beta"* ]]; then
+      file_type="beta"
+      upload_wowinterface=
+    else
+      file_type="release"
+    fi
+  fi
+
 	if [ -n "$upload_curseforge" -o -n "$upload_wowinterface" -o -n "$upload_github" ] && ! which jq &>/dev/null; then
 		echo "Skipping upload because \"jq\" was not found."
 		echo
@@ -2077,16 +2090,6 @@ if [ -z "$skip_zipfile" ]; then
 		#        - If the tag contains the word "alpha", it will be marked as an alpha file.
 		#        - If instead the tag contains the word "beta", it will be marked as a beta file.
 		# https://authors.curseforge.com/docs/packaging
-		file_type="alpha"
-		if [ -n "$tag" ]; then
-			if [[ "${tag,,}" == *"alpha"* ]]; then
-				file_type="alpha"
-			elif [[ "${tag,,}" == *"beta"* ]]; then
-				file_type="beta"
-			else
-				file_type="release"
-			fi
-		fi
 
 		_cf_payload=$( cat <<-EOF
 		{
