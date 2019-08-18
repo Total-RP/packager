@@ -1947,10 +1947,6 @@ if [ -z "$skip_zipfile" ]; then
 	archive_package_name="${package//[^A-Za-z0-9._-]/_}"
 
 	classic_tag=
-	if [ -n "$classic" ] && [[ "${project_version,,}" != *"classic"* ]]; then
-		# if it's a classic build, and classic isn't in the name, append it for clarity
-		# classic_tag="-classic"
-	fi
 
 	archive_version="$project_version"
 	archive_name="$archive_package_name-$project_version$classic_tag.zip"
