@@ -96,6 +96,7 @@ exit_code=0
 declare -A CLASSIC_VERSIONS
 CLASSIC_VERSIONS["1.13.2"]="11302"
 CLASSIC_VERSIONS["1.13.3"]="11303"
+CLASSIC_VERSIONS["1.13.4"]="11304"
 
 # Process command-line options
 usage() {
@@ -914,7 +915,7 @@ set_localization_url() {
 	if [ -n "$slug" ] && [ -n "$cf_token" ] && [ -n "$project_site" ]; then
 		localization_url="${project_site}/api/projects/$slug/localization/export"
 	fi
-	if [ -z "$localization_url" ] && grep -rq --include="*.lua" "@localization"; then
+	if [ -z "$localization_url" ] && grep -rq --include="*.lua" "@localization" "$topdir"; then
 		echo "Skipping localization! Missing CurseForge API token and/or project id is invalid."
 		echo
 	fi
@@ -2203,6 +2204,10 @@ if [ -z "$skip_zipfile" ]; then
 			game_version=$( echo "$_wowi_versions" | jq -r '.[] | select(.interface == "'"$toc_version"'" and .default == true) | .id' 2>/dev/null )
 			if [ -z "$game_version" ]; then
 				game_version=$( echo "$_wowi_versions" | jq -r 'map(select(.interface == "'"$toc_version"'"))[0] | .id // empty' 2>/dev/null )
+			fi
+			# handle delayed support from WoWI
+			if [ -z "$game_version" ] && [ -n "$classic" ]; then
+				game_version=$( echo "$_wowi_versions" | jq -r '.[] | select(.interface == "'$((toc_version - 1))'") | .id' 2>/dev/null )
 			fi
 			if [ -z "$game_version" ]; then
 				game_version=$( echo "$_wowi_versions" | jq -r '.[] | select(.default == true) | .id' 2>/dev/null )
