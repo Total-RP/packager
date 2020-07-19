@@ -84,6 +84,7 @@ pkgmeta_file=
 game_version=
 game_version_id=
 toc_version=
+alpha=
 classic=
 
 ## END USER OPTIONS
@@ -97,6 +98,7 @@ declare -A CLASSIC_VERSIONS
 CLASSIC_VERSIONS["1.13.2"]="11302"
 CLASSIC_VERSIONS["1.13.3"]="11303"
 CLASSIC_VERSIONS["1.13.4"]="11304"
+CLASSIC_VERSIONS["1.13.5"]="11305"
 
 # Process command-line options
 usage() {
@@ -371,11 +373,17 @@ set_info_git() {
 		si_previous_tag=
 		si_tag=
 	elif [ "$_si_tag" != "$si_tag" ]; then
-		si_project_version=$_si_tag
-		si_previous_tag=$si_tag
+		# not on a tag
+		si_project_version=$( git -C "$si_repo_dir" describe --tags --exclude="*alpha*" 2>/dev/null )
+		si_previous_tag=$( git -C "$si_repo_dir" describe --tags --abbrev=0 --exclude="*alpha*" 2>/dev/null )
 		si_tag=
 	else # we're on a tag, just jump back one commit
-		si_previous_tag=$( git -C "$si_repo_dir" describe --tags --abbrev=0 HEAD~ 2>/dev/null )
+		if [[ $si_tag != *"beta"* && $si_tag != *"alpha"* ]]; then
+			# full release, ignore beta tags
+			si_previous_tag=$( git -C "$si_repo_dir" describe --tags --abbrev=0 --exclude="*alpha*" --exclude="*beta*" HEAD~ 2>/dev/null )
+		else
+			si_previous_tag=$( git -C "$si_repo_dir" describe --tags --abbrev=0 --exclude="*alpha*" HEAD~ 2>/dev/null )
+		fi
 	fi
 }
 
@@ -532,6 +540,7 @@ hg) 	set_info_hg  "$topdir" ;;
 esac
 
 tag=$si_tag
+[[ -z "$tag" || "${tag,,}" == *"alpha"* ]] && alpha="true"
 project_version=$si_project_version
 previous_version=$si_previous_tag
 project_hash=$si_project_hash
@@ -851,7 +860,7 @@ if [ -n "$previous_version" ]; then
 fi
 (
 	[ -n "$classic" ] && retail="non-retail" || retail="retail"
-	[ -n "$tag" ] && alpha="non-alpha" || alpha="alpha"
+	[ -z "$alpha" ] && alpha="non-alpha" || alpha="alpha"
 	echo "Build type: ${retail} ${alpha} non-debug${nolib:+ nolib}"
 	echo
 )
@@ -1385,7 +1394,7 @@ copy_directory_tree() {
 
 if [ -z "$skip_copying" ]; then
 	cdt_args="-dp"
-	if [ -n "$tag" ]; then
+	if [ -z "$alpha" ]; then
 		cdt_args="${cdt_args}a"
 	fi
 	if [ -z "$skip_localization" ]; then
@@ -1779,8 +1788,10 @@ else
 	if [ "$repository_type" = "git" ]; then
 		changelog_url=
 		changelog_version=
+		changelog_previous="[Previous Releases](${project_github_url}/releases)"
 		changelog_url_wowi=
 		changelog_version_wowi=
+		changelog_previous_wowi="[url=${project_github_url}/releases]Previous Releases[/url]"
 		_changelog_range=
 		if [ -z "$previous_version" ] && [ -z "$tag" ]; then
 			# no range, show all commits up to ours
@@ -1815,8 +1826,14 @@ else
 		if [ -z "$project_github_url" ]; then
 			changelog_url=
 			changelog_version=$project_version
+			changelog_previous=
 			changelog_url_wowi=
 			changelog_version_wowi="[color=orange]${project_version}[/color]"
+			changelog_previous_wowi=
+		elif [ -z "$github_token" ]; then
+			# not creating releases :(
+			changelog_previous=
+			changelog_previous_wowi=
 		fi
 		changelog_date=$( TZ= printf "%(%Y-%m-%d)T" "$project_timestamp" )
 
@@ -1824,7 +1841,7 @@ else
 		# $project
 
 		## $changelog_version ($changelog_date)
-		$changelog_url
+		$changelog_url $changelog_previous
 
 		EOF
 		git -C "$topdir" log "$_changelog_range" --pretty=format:"###%B" \
@@ -1838,10 +1855,6 @@ else
 		# WoWI uses BBCode, generate something usable to post to the site
 		# the file is deleted on successful upload
 		if [ -n "$addonid" ] && [ -n "$tag" ] && [ -n "$wowi_gen_changelog" ]; then
-			changelog_previous_wowi=
-			if [ -n "$project_github_url" ] && [ -n "$github_token" ]; then
-				changelog_previous_wowi="[url=${project_github_url}/releases]Previous releases[/url]"
-			fi
 			wowi_changelog="$releasedir/WOWI-$project_version-CHANGELOG.txt"
 			cat <<- EOF | line_ending_filter > "$wowi_changelog"
 			[size=5]${project}[/size]
@@ -2116,9 +2129,13 @@ if [ -z "$skip_zipfile" ]; then
 				fi
 			fi
 			if [ -z "$game_version_id" ]; then
-				# 517 = retail, 67408 = classic
-				game_version_id=$( echo "$_cf_versions" | jq -c 'map(select(.gameVersionTypeID == 517)) | max_by(.id) | [.id]' 2>/dev/null )
-				game_version=$( echo "$_cf_versions" | jq -r 'map(select(.gameVersionTypeID == 517)) | max_by(.id) | .name' 2>/dev/null )
+				if [ -n "$classic" ]; then
+					game_version_type_id=67408
+				else
+					game_version_type_id=517
+				fi
+				game_version_id=$( echo "$_cf_versions" | jq -c --argjson v "$game_version_type_id" 'map(select(.gameVersionTypeID == $v)) | max_by(.id) | [.id]' 2>/dev/null )
+				game_version=$( echo "$_cf_versions" | jq -r --argjson v "$game_version_type_id" 'map(select(.gameVersionTypeID == $v)) | max_by(.id) | .name' 2>/dev/null )
 			fi
 		fi
 		if [ -z "$game_version_id" ]; then
@@ -2321,7 +2338,7 @@ if [ -z "$skip_zipfile" ]; then
 		  "name": "$tag",
 		  "body": $( jq --slurp --raw-input '.' < "$pkgdir/$changelog" ),
 		  "draft": false,
-		  "prerelease": $( [[ "${tag,,}" == *"beta"* ]] && echo true || echo false )
+		  "prerelease": $( [[ "${tag,,}" == *"beta"* || "${tag,,}" == *"alpha"* ]] && echo true || echo false )
 		}
 		EOF
 		)
