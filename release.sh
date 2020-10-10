@@ -2303,6 +2303,13 @@ if [ -z "$skip_zipfile" ]; then
 		rm -f "$resultfile" 2>/dev/null
 	fi
 
+  # Re-adding the classic tag for the Github release
+  if [[ -n "$classic" ]]; then
+      archive_name="$archive_package_name-$project_version-classic.zip"
+      mv "$archive" "$releasedir/$archive_name"
+      archive="$releasedir/$archive_name"
+  fi
+
 	# Create a GitHub Release for tags and upload the zipfile as an asset.
 	if [ -n "$upload_github" ]; then
 		upload_github_asset() {
